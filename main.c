@@ -210,6 +210,85 @@ void List(NOTE *p) {
     printf("This xml file is analysed.\n");
 }
 
+/* 比较两个曲子 */
+void dis(NOTE *p1, NOTE *p2, int d1, int d2) {
+    NOTE *cur1 = NULL, *cur2 = NULL;   /* 链表当前音符 */
+    NOTE *ori=NULL;		       /* 小音符还没开始比较是的位置 */
+    unsigned short num=0;	       /* 小节号数 */
+    float abs_dur1=0.00;	       /* 绝对时值 */
+    float abs_dur2=0.00;	       /* 绝对时值 */    
+    unsigned char time=0;	       /* 长音符对于小音符的倍数 */
+    unsigned char d_a=0;	       /* a曲该音符区间 */
+    unsigned char d_b=0;	       /* b曲该音符区间 */
+    unsigned char edit_dis=0;	       /*  */
+    unsigned char add_dur=0;	       /* 小音符累加步长 */
+    unsigned char pitch=0;	       /* pitch dis */
+       
+
+
+    cur1=p1; cur2=p2;
+
+    /* 假设两个曲子小节数相同 */
+    for (num=1; num<=8; num=num+1) { /* 应该用cur1-next==NULL */
+    /* for (num=1; cur1->next!=NULL; num=num+1) { /\* 应该用cur1-next==NULL *\/ */
+	
+
+	/* printf("%.4f\n", abs_dur1); */
+
+	while (cur1->measure==num) { /* 同一小节 */
+
+	    if( cur1->duration>=cur2->duration ) { /* 本段可能应该放入for循环中 */
+		;
+	    } else {
+		ori=cur2; cur2=cur1; cur1=ori; /* cur1, cur2 exchange */
+	    }
+
+	    /* 两个音符，大小，倍数, 确定edit的长度 */
+	    abs_dur1 = (float)cur1->duration/d1;
+	    abs_dur2 = (float)cur2->duration/d2;
+	
+
+	    
+	    ori=cur2;
+	    /* for(edit_dis=0; (edit_dis*cur2->duration) <= cur1->duration; ) { /\* 有可能不能凑整 *\/ */
+	    for(edit_dis=0; d_b <= cur1->duration; ) { /* 有可能不能凑整 */
+		d_b+=cur2->duration;
+		edit_dis++;
+		cur2=cur2->next;
+	    }
+
+	    /* 确定了dur1 */
+	    d_a=cur1->duration;
+	    
+	    pitch=0;
+	    for(; ori!=cur2->next; ori=ori->next) {
+		pitch+=abs( get_dis(cur1->step) - get_dis(ori->step));
+	    }
+
+
+	    /* printf("measure[%02d]\n", num); */
+	    printf("dur1=%d\t", cur1->duration);
+	    printf("dur2=%d\t", cur2->duration);
+	    printf("edit_dis=%d\t", edit_dis);
+	    printf("pitch_dis=%d\n", pitch);
+
+	    /* pitch_dis */
+	 
+	    d_b = 0;		/* 小音符凑整的个数清0 */
+	    edit_dis = 0;		
+	    pitch=0;
+	    cur1=cur1->next; 	/* 大音符前进一步 */
+	}			/* while 同一小节 */
+
+
+	    
+	
+    } /* 同一小节内 */
+    
+
+    
+}
+
 main(int argc, char **argv) {
     
     unsigned short div1=0;  /* 以4表示一个四分音的时值 */
@@ -220,7 +299,7 @@ main(int argc, char **argv) {
     unsigned char beat_type = 4; /* 以什么音符为一拍 */
 
     NOTE *head1 = NULL, *head2 = NULL; /* 链表第一个音符 */
-    NOTE *cur1 = NULL, *cur2 = NULL;   /* 链表当前音符 */
+
 
 
     FILE *fp1;
@@ -257,5 +336,11 @@ main(int argc, char **argv) {
     printf("\n\n");
     printf("\n\n");
 
-    
+    /* 计算比较 */
+    /* 对于都是2/4拍的，duration 整除  divisions =  该音符占 4th 的多少，也就是绝对时值 */
+    /* 目前有8条乐曲，任选2条出来比较，有C(8,2)个组合，C(8,2)=8!/(2!x2!) = 8x7x6x5x3x2 = 10080 种 */
+
+    printf("%s  <---->   %s\n\n", argv[1], argv[2]);
+
+    dis(head1, head2, div1, div2);
 }
