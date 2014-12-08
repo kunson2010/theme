@@ -40,7 +40,7 @@ p_dis p_dis_tab[17]={           /* table of all pitchs from p0 */
 
 
 typedef struct note {            /* 音符 */
-    unsigned short  measure_num; /* 所属的小节号数 */
+    unsigned short  measure; /* 所属的小节号数 */
     char            step[32];    /* 音名, 含临时升降 */
     unsigned short   duration;   /* 时值 */
     struct note     *next;
@@ -95,7 +95,7 @@ NOTE *xml_data(FILE *fp, unsigned short *divisions) {
     NOTE *head=NULL, *cur = NULL; /* 链表当前音符 */
     char xml_line[XML_LINE_LEN];
     unsigned short note_num=0;
-    char div[32]="";		/* divisions */
+    char div[32]="";            /* divisions */
     char num[32]="";            /* 小节号 */
     char dur[32]="";            /* 时值 */
     char acc[32]="";            /* 升降号 */
@@ -109,47 +109,47 @@ NOTE *xml_data(FILE *fp, unsigned short *divisions) {
     bzero(xml_line, sizeof(xml_line));
     while ( NULL != fgets(xml_line, XML_LINE_LEN, fp) ) {
         if ( strstr(xml_line, "<measure ") ) { /* 检测小节 */
-	    
+            
             /* 得到measure号 */
             bzero(num, sizeof(num));
             sscanf(xml_line, "%*[^\"]\"%[^\"]", num); /* %d 直接读取更好 ！ */
             
-	    
+            
 
-	    
-	    /* 小节开始 */
-	    
-	    bzero(xml_line, sizeof(xml_line));
-	    while ( NULL != fgets(xml_line, XML_LINE_LEN, fp) ) { /* 在一个小节内 */
-		
-		/* 读入mode， key， deats， deat-type等等 */
-		if ( strstr(xml_line, "<divisions>")) { /* divisions */
-		    sscanf(xml_line, "%*[^>]>%[^<]", div); /* %d 直接读取更好 ！ */
-		    *divisions=atol(div);
-		    continue;
-		}
-		
-		if ( strstr(xml_line, "<note") ) { /* 一个音符开始 */
-		    /* 进入一个note */
-		    if ( 0==note_num  ) { /* 第一个音符 */
-			head=new_note(); /* 生成节点 */
-			cur=head;
-			note_num=1;	/* 以后再也不进入本分支 */
-
-		    } else { /* 第二小节开始, 指针定位 */
-			cur->next=new_note(); /* 链结进来一个新节点 */
-			cur=cur->next; /* cur指针前进一步 */
-		    }
-		    cur->measure_num = atol(num); /* measure号写入data */
-		    continue;
-		} 
-		  
-
-		
+            
+            /* 小节开始 */
+            
+            bzero(xml_line, sizeof(xml_line));
+            while ( NULL != fgets(xml_line, XML_LINE_LEN, fp) ) { /* 在一个小节内 */
                 
-		/* bzero(xml_line, sizeof(xml_line)); */
-		/* while ( NULL != fgets(xml_line, XML_LINE_LEN, fp) ) { /\* 在一个音符内 *\/ */
-		
+                /* 读入mode， key， deats， deat-type等等 */
+                if ( strstr(xml_line, "<divisions>")) { /* divisions */
+                    sscanf(xml_line, "%*[^>]>%[^<]", div); /* %d 直接读取更好 ！ */
+                    *divisions=atol(div);
+                    continue;
+                }
+                
+                if ( strstr(xml_line, "<note") ) { /* 一个音符开始 */
+                    /* 进入一个note */
+                    if ( 0==note_num  ) { /* 第一个音符 */
+                        head=new_note(); /* 生成节点 */
+                        cur=head;
+                        note_num=1;     /* 以后再也不进入本分支 */
+
+                    } else { /* 第二小节开始, 指针定位 */
+                        cur->next=new_note(); /* 链结进来一个新节点 */
+                        cur=cur->next; /* cur指针前进一步 */
+                    }
+                    cur->measure = atol(num); /* measure号写入data */
+                    continue;
+                } 
+                  
+
+                
+                
+                /* bzero(xml_line, sizeof(xml_line)); */
+                /* while ( NULL != fgets(xml_line, XML_LINE_LEN, fp) ) { /\* 在一个音符内 *\/ */
+                
                 if ( strstr(xml_line, "<step>") ) {
                     sscanf(xml_line, "%*[^>]>%[^<]", cur->step);
                     if ( acc_in_measure==TRUE) { /* 如果本小节有升降号， 那么把同名音符改为升降音 */
@@ -159,7 +159,7 @@ NOTE *xml_data(FILE *fp, unsigned short *divisions) {
                     }
                     continue;
                 }
-		
+                
                 /* 多个音符有升降号怎么处理？ */
                 /* 还原符号怎么处理 */
                 if ( strstr(xml_line, "<accidental>") ) { /* 临时升降号 */
@@ -171,37 +171,49 @@ NOTE *xml_data(FILE *fp, unsigned short *divisions) {
                     strcpy(acc_step, cur->step); /* 复制该升降音符 */
                     continue;
                 }
-		
+                
                 if ( strstr(xml_line, "<duration>") ) { /* 音符的时值 */
                     sscanf(xml_line, "%*[^>]>%[^<]", dur);
                     cur->duration=atol(dur);
                     continue;
                 }
-		
+                
                 if ( strstr(xml_line, "</note>") ) { /* 一个音符结束 */
                     continue;
                 }
-	
-	
+        
+        
             
-		if ( strstr(xml_line, "</measure>") ) { /* 小节结束 */
-		    acc_in_measure=FALSE;            /* 清除临时升降记号标记 */
-		    break;
-		}
-	    } /* 在一小节内 */
-	}   /* 完成一小节内 */
+                if ( strstr(xml_line, "</measure>") ) { /* 小节结束 */
+                    acc_in_measure=FALSE;            /* 清除临时升降记号标记 */
+                    break;
+                }
+            } /* 在一小节内 */
+        }   /* 完成一小节内 */
     }
     
     cur->next=new_note(); /* 末尾空节点 */
-    cur=cur->next;	  /* cur指针前进一步 */
+    cur=cur->next;        /* cur指针前进一步 */
     
     return head;
 }
 
+void List(NOTE *p) {
+    NOTE *cur=NULL;
+
+    for (cur=p; cur->next!=NULL; cur=cur->next) {
+        printf("measuer=%d\n", cur->measure);
+        printf("step=%s\n", cur->step);
+        printf("duration=%d\n", cur->duration);
+    }
+
+    printf("This xml file is analysed.\n");
+}
 
 main(int argc, char **argv) {
     
-    unsigned short divisions=0;  /* 以4表示一个四分音的时值 */
+    unsigned short div1=0;  /* 以4表示一个四分音的时值 */
+    unsigned short div2=0;  /* 以4表示一个四分音的时值 */
     char mode[32] = "";         /* "major" "minor" */
     short fifths = 0;         /* 升降符号的个数，也就是调号, 0代表C */
     unsigned char beats = 2;  /* 每小节的拍子数 */
@@ -213,7 +225,6 @@ main(int argc, char **argv) {
 
     FILE *fp1;
     FILE *fp2;
-    
 
     
     /* 1  Open 2 xml files */
@@ -223,30 +234,28 @@ main(int argc, char **argv) {
         return -1;
     }
 
-    /* fp2 = fopen(argv[2], "r"); */
-    /* if( fp2 == NULL ) { */
-    /*     printf("open file error.\n"); */
-    /*     return -1; */
-    /* } */
-
-
-
+    fp2 = fopen(argv[2], "r");
+    if( fp2 == NULL ) {
+        printf("open file error.\n");
+        return -1;
+    }
         
         
     /* 读入XML到链表 */
-    head1 = xml_data(fp1, &divisions); /* &divisions应该替换成 div，mode，key，beats等的结构指针 */
-    /* head2 = xml_data(fp2); */
+    head1 = xml_data(fp1, &div1); /* &div1应该替换成 div，mode，key，beats等的结构指针 */
+    head2 = xml_data(fp2, &div2); /* &div1应该替换成 div，mode，key，beats等的结构指针 */
 
-    cur1=head1;
-    for (cur1=head1; cur1->next!=NULL; cur1=cur1->next) {
-        printf("measuer_num=%d\n", cur1->measure_num);
-        printf("step=%s\n", cur1->step);
-        printf("duration=%d\n", cur1->duration);
-    }
 
-    printf("div=%d\n", divisions);
-
+    List(head1);
+    
+    printf("file div=%d\n", div1);
     printf("\n\n");
     
+    List(head2);
+    printf("file div=%d\n", div2);
 
+    printf("\n\n");
+    printf("\n\n");
+
+    
 }
