@@ -1,15 +1,20 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <stdio.h>              /* FILE ç±»å‹ */
+#include <string.h>             /* bzero  ä¸å…¼å®¹ */
+#include <stdlib.h>             /* malloc ä¸å…¼å®¹ */
 
 
-#define Alpha 0.5
-#define Beta  0.5
+#define BOOL unsigned char
+#define TRUE  1
+#define FALSE 0
+#define KKK  char
+
+#define MAX_NUM_PITCH 64        /* å‡è®¾æ¯æ¬¡æ¯”è¾ƒï¼Œæœ€å¤šå‰ç¢æˆ64ä¸ªéŸ³ç¬¦ */
+#define XML_LINE_LEN 256        /* xmlæ¯è¡Œé•¿åº¦ */
 
 
 typedef struct{
-    char p_name[32];            /* pitch Ãû */
-    char p_dis;                 /* µ½p0µÄ¾àÀë */
+    char p_name[32];            /* pitch å */
+    char p_dis;                 /* åˆ°p0çš„è·ç¦» */
 } p_dis;  // one recored of pitch distance
 
 p_dis p_dis_tab[17]={           /* table of all pitchs from p0 */
@@ -33,234 +38,47 @@ p_dis p_dis_tab[17]={           /* table of all pitchs from p0 */
 };
 
 
-char measure_theme[64][32];     /* Ö÷ÌâµÄÈ«²¿¼ÍÂ¼£¬ ÒÔ16thÎªÒ»¸ö¼ÍÂ¼ */
-char measure_var[64][32];       /* ±ä×àµÄÈ«²¿¼ÍÂ¼£¬ ÒÔ16thÎªÒ»¸ö¼ÍÂ¼ */
 
-int get_dis(char * );
+typedef struct note {            /* éŸ³ç¬¦ */
+    unsigned short  measure_num; /* æ‰€å±çš„å°èŠ‚å·æ•° */
+    char            step[32];    /* éŸ³å, å«ä¸´æ—¶å‡é™ */
+    unsigned short   duration;   /* æ—¶å€¼ */
+    struct note     *next;
+} NOTE;
 
-main(int argc, char** argv)
-{
-    FILE *fp_theme, *fp_var; 
-    char str_theme[256];
-    char str_var[256];
+typedef struct  {               /* ä¸€ä¸ªå°èŠ‚ä¸­æ¯ä¸ªéŸ³ç¬¦çš„å†…å®¹,
+                                   å·²ç»å‰ç¢äº†ï¼Œæœ€ç»ˆæ¯”è¾ƒæ—¶ */
+    char step[32];
+    unsigned char duration;
+} pitch;
 
-    int i;
-    char mi=0;                  /* number of measure */
-    char mii=0;                 /* number of 16th */
+pitch measure1[MAX_NUM_PITCH];
+pitch measure2[MAX_NUM_PITCH];
+
+
+NOTE *new_note(void);
+int get_dis(char *);
+NOTE *xml_data(FILE *, unsigned short *);
+
+
+
+
+
+/* æ–°å¢ä¸€ä¸ªéŸ³ç¬¦èŠ‚ç‚¹ */
+NOTE *new_note() {
+    NOTE *p;
     
-    char step[32]="";           /* setp ÒôÃû */
-    char acc[32]="";            /* accidental, ÁÙÊ±Éı½µ¼ÇºÅ */
-    char dur[32]="";            /* duration, Òô·ûµÄÊ±³¤ */
-    char acc_in_measure=0;      /* Ğ¡½ÚÄÚÓĞÎŞÁÙÊ±Éı½µºÅ */
-    char acc_step[32]="";       /* Éı½µµÄÒôÃû */
-
-    long El_var=0;             /* var Ã¿´ÎÒô·û·Ö½âµÄ Edit length */
-    long El_theme=0;           /* theme   Ã¿´ÎÒô·û·Ö½âµÄ Edit length */
-    float dd=0;                /* pitch_dis*duration */
-  
-
-    /* 1  Open 2 xml files */
-    fp_theme = fopen("./K265-theme.xml", "r");
-    if( fp_theme == NULL ) {
-        printf("open file error.\n");
-        return -1;
-    }
-
-
-    fp_var   = fopen("./K265-varI.xml", "r");
-    if( fp_var == NULL ) {
-        printf("open file error.\n");
-        return -1;
-    }
+    p=malloc(sizeof(NOTE));
+    bzero(p, sizeof(NOTE));
+    p->next=NULL;
     
-
-
-    /* 2  read theme.xml */
-    bzero(str_theme, sizeof(str_theme));
-
-    mi=0; mii=0; 
-    bzero(measure_theme, 64*32);
-    while ( NULL !=fgets(str_theme, 256, fp_theme) ) {
-
-        if(strstr(str_theme, "<measure")) { /* Ò»Ğ¡½ÚÄÚ */
-            mi++; 
-      
-            bzero(str_theme, sizeof(str_theme));
-            while ( NULL !=fgets(str_theme, 256, fp_theme) )  { /* Ğ¡½ÚÄÚ¶ÁÈëĞĞ */
-
-                if(strstr(str_theme, "<step")) { /* ÒôÃû */
-                    sscanf(str_theme, "%*[^>]>%[^<]", step); 
-                    if(acc_in_measure==1) {     /* Èç¹ûÓĞÉı½µÒô·û£¬
-                                                   ÄÇÃ´°ÑÓëÉı½µÒôÍ¬ÃûµÄÒô·û¸ÄÎªÉı½µÒô */
-                        if (step[0] == acc_step[0]) {   /* Èç¹ûÓëÉı½µÒôÍ¬ÒôÃû */
-                            strcpy(step, acc_step);
-                        }
-                    }
-                    
-                    /* printf("step=%s\n", step); */
-                    continue;
-                }
-          
-                if(strstr(str_theme, "<accidental")){ /* ÁÙÊ±Éı½µºÅ */
-                    acc_in_measure=1;                 /* Ğ¡½ÚÄÚÓĞÉı½µºÅ */
-                    sscanf(str_theme, "%*[^>]>%[^<]", acc);
-                    /* printf("acc=%s\n", acc); /\* accidental *\/ */
-                    sprintf(step+strlen(step), "%s", acc); /* ¶ÔµÚÒ»¸öÉı½µÒô·û×·¼ÓÉı½µºÅ */
-                    strcpy(acc_step, step);                /* ¸´ÖÆ¸ÃÉı½µÒô·û */
-                    /* printf("%s\n", step); */
-                    continue;
-                }
-
-          
-                if(strstr(str_theme, "<duration")){ /* Òô·ûµÄÊ±³¤ */
-                    sscanf(str_theme, "%*[^>]>%[^<]", dur);
-                    /* printf("duration=%s\n", dur); /\* duration *\/ */
-                    continue;
-                }
-
-        
-                if(strstr(str_theme, "</note")){ /* Ò»¸öÒô·û½áÊø */
-                    /* printf("16th notes num=%d\n", atol(dur)/64); */
-                    /* 1.1.1 fill in measure_theme */
-                    for (i=0; i<atol(dur)/64;i++){
-                        sprintf(measure_theme[mii+i],"%s", step); /* Ğ´Èë·ÖÁÑ¸ÃÒô½ÚÎª16th²¢Ğ´Èë */
-                    }
-                    mii=mii+i;          /* ÓĞĞ§¼ÇÂ¼ÊıÔö¼Óµ½ĞÂÖµ  */
-          
-                    /* for (i=0; i<mii; i++) { */
-                    /*   printf("mesure[%d]=%s\n", i, measure_theme[i]); */
-                    /* } */
-                    continue;
-                }
-        
-                if(strstr(str_theme, "</measure")) { 
-                    break;
-                }
-            } /* Ğ¡½ÚÄÚ¶ÁÈëĞĞ */
-        }     /* ÔÚÒ»Ğ¡½ÚÄÚ */
-    }         /* ¶ÁÈ¡themeÎÄ¼ş */
-  
-    printf("mii=%d\n", mii);
-    for (i=0; i<mii; i++) {
-        printf("mesure_theme[%02d]=%s\n", i, measure_theme[i]);
-    }
-    printf("%d measures found.\n", mi);
-
-
-    /* 3  read var.xml */
-    bzero(str_var, sizeof(str_var));
-
-    mi=0; mii=0; 
-    bzero(measure_var, 8*32);
-    while ( NULL !=fgets(str_var, 256, fp_var) )  {
-        if(strstr(str_var, "<measure")) { /* Ò»Ğ¡½ÚÄÚ */
-            mi++; 
-	    
-            bzero(str_var, sizeof(str_var));
-            while ( NULL !=fgets(str_var, 256, fp_var) )  { /* Ğ¡½ÚÄÚ¶ÁÈëĞĞ */
-
-                if(strstr(str_var, "<step")) { /* ÒôÃû */
-                    sscanf(str_var, "%*[^>]>%[^<]", step); 
-                    if(acc_in_measure==1) {     /* Èç¹ûÓĞÉı½µÒô·û£¬
-                                                   ÄÇÃ´°ÑÓëÉı½µÒôÍ¬ÃûµÄÒô·û¸ÄÎªÉı½µÒô */
-                        if (step[0] == acc_step[0]) {   /* Èç¹ûÓëÉı½µÒôÍ¬ÒôÃû */
-                            strcpy(step, acc_step);
-                        }
-                    }
-                    
-                    /* printf("step=%s\n", step); */
-                    continue;
-                }
-          
-                if(strstr(str_var, "<accidental")){ /* ÁÙÊ±Éı½µºÅ */
-                    acc_in_measure=1;                 /* Ğ¡½ÚÄÚÓĞÉı½µºÅ */
-                    sscanf(str_var, "%*[^>]>%[^<]", acc);
-                    /* printf("acc=%s\n", acc); /\* accidental *\/ */
-                    sprintf(step+strlen(step), "%s", acc); /* ¶ÔµÚÒ»¸öÉı½µÒô·û×·¼ÓÉı½µºÅ */
-                    strcpy(acc_step, step);                /* ¸´ÖÆ¸ÃÉı½µÒô·û */
-                    /* printf("%s\n", step); */
-                    continue;
-                }
-
-          
-                if(strstr(str_var, "<duration")){ /* Òô·ûµÄÊ±³¤ */
-                    sscanf(str_var, "%*[^>]>%[^<]", dur);
-                    /* printf("duration=%s\n", dur); /\* duration *\/ */
-                    continue;
-                }
-
-        
-                if(strstr(str_var, "</note")){ /* Ò»¸öÒô·û½áÊø */
-                    /* printf("16th notes num=%d\n", atol(dur)/64); */
-                    /* 1.1.1 fill in measure_var */
-                    for (i=0; i<atol(dur)/64;i++){
-                        sprintf(measure_var[mii+i],"%s", step); /* Ğ´Èë·ÖÁÑ¸ÃÒô½ÚÎª16th²¢Ğ´Èë */
-                    }
-                    mii=mii+i;          /* ÓĞĞ§¼ÇÂ¼ÊıÔö¼Óµ½ĞÂÖµ  */
-          
-                    /* for (i=0; i<mii; i++) { */
-                    /*   printf("mesure[%d]=%s\n", i, measure_var[i]); */
-                    /* } */
-                    continue;
-                }
-        
-                if(strstr(str_var, "</measure")) {
-                    acc_in_measure=0;
-                    break;
-                }
-            } /* Ğ¡½ÚÄÚ¶ÁÈëĞĞ */
-        }     /* ÔÚÒ»Ğ¡½ÚÄÚ */
-    }         /* ¶ÁÈ¡themeÎÄ¼ş */
-
-    printf("mii=%d\n", mii);    
-    for (i=0; i<mii; i++) {
-       printf("mesure_var[%d]=%s\n", i, measure_var[i]);
-    }
-    printf("%d measures found.\n", mi);
-
-    printf("\n\n\n\n");
-
-    /* 4  ¼ÆËãºÍÀÛ¼Ó */
-
-    dd=0; El_theme=0; El_var=0;
-
-    for(i=0; i<=63; i++) {
-        do {            /* into 4¸ö16th */
-            if(strcmp(measure_theme[i], measure_var[i])!=0) { /* sum( pitch_dis*duation ) */
-                dd += abs( get_dis(measure_var[i]) - get_dis(measure_theme[i])) * (64.0/512.0);
-            }
-            
-            El_theme = 5;       /* !!!! */
-            El_var = 0;         /* !!!! */
-            i++;
-        } while (0 != ( (i)%4 ));
-        i--;
-
-        if( 0 == ( (i+1)%4 ) ) { /* finished 4¸ö16th */ 
-            printf("A(d1+d2) + B(sum[pitch_dis*duration)]   =   A(%d+%d)+B(%f)\n", El_theme, El_var, dd);               
-            dd=0; El_theme=0; El_var=0;
-        }
-        
-        if( 0 == ( (i+1)%8 ) ) { /* Íê³ÉÁËÒ»¸öĞ¡½Ú */
-            printf("measure %d finished------------\n", (i+1)/8 );
-        } 
-    }
-    
-        
-    
-    /* 5 Êä³ö */
-    /* printf("\n\n\n\ndistainc of these two pieces of music is  -------->%f\n", dd); */
-    printf("\n\n\n\n Finished.\n");
-    fclose(fp_theme);
-    fclose(fp_var);
-    return 0;
+    return (p);
 }
 
-  
+
 /* input: pitch name */
 /* return: it's pitch distance */
-int get_dis(char * pName)
-{
+int get_dis(char * pName) {
     int dis=0;
     int i;
 
@@ -272,3 +90,163 @@ int get_dis(char * pName)
     return 0;
 }
 
+/*NOTE * */
+NOTE *xml_data(FILE *fp, unsigned short *divisions) {
+    NOTE *head=NULL, *cur = NULL; /* é“¾è¡¨å½“å‰éŸ³ç¬¦ */
+    char xml_line[XML_LINE_LEN];
+    unsigned short note_num=0;
+    char div[32]="";		/* divisions */
+    char num[32]="";            /* å°èŠ‚å· */
+    char dur[32]="";            /* æ—¶å€¼ */
+    char acc[32]="";            /* å‡é™å· */
+    char acc_step[32]="";       /* éŸ³ç¬¦å¸¦å‡é™å· */
+    BOOL acc_in_measure=FALSE;  /* æœ¬å°èŠ‚æ˜¯å¦æœ‰å‡é™å· */
+    BOOL new_measure=FALSE;     /* æ˜¯å¦åœ¨åŒä¸€å°èŠ‚ */
+
+
+    
+    /* è¯»å…¥ä¸€è¡Œ */
+    bzero(xml_line, sizeof(xml_line));
+    while ( NULL != fgets(xml_line, XML_LINE_LEN, fp) ) {
+        if ( strstr(xml_line, "<measure ") ) { /* æ£€æµ‹å°èŠ‚ */
+	    
+            /* å¾—åˆ°measureå· */
+            bzero(num, sizeof(num));
+            sscanf(xml_line, "%*[^\"]\"%[^\"]", num); /* %d ç›´æ¥è¯»å–æ›´å¥½ ï¼ */
+            
+	    
+
+	    
+	    /* å°èŠ‚å¼€å§‹ */
+	    
+	    bzero(xml_line, sizeof(xml_line));
+	    while ( NULL != fgets(xml_line, XML_LINE_LEN, fp) ) { /* åœ¨ä¸€ä¸ªå°èŠ‚å†… */
+		
+		/* è¯»å…¥modeï¼Œ keyï¼Œ deatsï¼Œ deat-typeç­‰ç­‰ */
+		if ( strstr(xml_line, "<divisions>")) { /* divisions */
+		    sscanf(xml_line, "%*[^>]>%[^<]", div); /* %d ç›´æ¥è¯»å–æ›´å¥½ ï¼ */
+		    *divisions=atol(div);
+		    continue;
+		}
+		
+		if ( strstr(xml_line, "<note") ) { /* ä¸€ä¸ªéŸ³ç¬¦å¼€å§‹ */
+		    /* è¿›å…¥ä¸€ä¸ªnote */
+		    if ( 0==note_num  ) { /* ç¬¬ä¸€ä¸ªéŸ³ç¬¦ */
+			head=new_note(); /* ç”ŸæˆèŠ‚ç‚¹ */
+			cur=head;
+			note_num=1;	/* ä»¥åå†ä¹Ÿä¸è¿›å…¥æœ¬åˆ†æ”¯ */
+
+		    } else { /* ç¬¬äºŒå°èŠ‚å¼€å§‹, æŒ‡é’ˆå®šä½ */
+			cur->next=new_note(); /* é“¾ç»“è¿›æ¥ä¸€ä¸ªæ–°èŠ‚ç‚¹ */
+			cur=cur->next; /* curæŒ‡é’ˆå‰è¿›ä¸€æ­¥ */
+		    }
+		    cur->measure_num = atol(num); /* measureå·å†™å…¥data */
+		    continue;
+		} 
+		  
+
+		
+                
+		/* bzero(xml_line, sizeof(xml_line)); */
+		/* while ( NULL != fgets(xml_line, XML_LINE_LEN, fp) ) { /\* åœ¨ä¸€ä¸ªéŸ³ç¬¦å†… *\/ */
+		
+                if ( strstr(xml_line, "<step>") ) {
+                    sscanf(xml_line, "%*[^>]>%[^<]", cur->step);
+                    if ( acc_in_measure==TRUE) { /* å¦‚æœæœ¬å°èŠ‚æœ‰å‡é™å·ï¼Œ é‚£ä¹ˆæŠŠåŒåéŸ³ç¬¦æ”¹ä¸ºå‡é™éŸ³ */
+                        if ( cur->step[0] == acc_step[0] ) { /* å¦‚æœåŒå */
+                            strcpy(cur->step, acc_step);
+                        }
+                    }
+                    continue;
+                }
+		
+                /* å¤šä¸ªéŸ³ç¬¦æœ‰å‡é™å·æ€ä¹ˆå¤„ç†ï¼Ÿ */
+                /* è¿˜åŸç¬¦å·æ€ä¹ˆå¤„ç† */
+                if ( strstr(xml_line, "<accidental>") ) { /* ä¸´æ—¶å‡é™å· */
+                    acc_in_measure=TRUE;               /* æœ¬å°èŠ‚æœ‰å‡é™å· */
+                    
+                    bzero(acc, sizeof(acc));
+                    sscanf(xml_line, "%*[^>]>%[^<]", acc);
+                    sprintf(cur->step+strlen(cur->step), "%s", acc); /* å¯¹ç¬¬ä¸€ä¸ªéŸ³ç¬¦è¿½åŠ å‡é™å· */
+                    strcpy(acc_step, cur->step); /* å¤åˆ¶è¯¥å‡é™éŸ³ç¬¦ */
+                    continue;
+                }
+		
+                if ( strstr(xml_line, "<duration>") ) { /* éŸ³ç¬¦çš„æ—¶å€¼ */
+                    sscanf(xml_line, "%*[^>]>%[^<]", dur);
+                    cur->duration=atol(dur);
+                    continue;
+                }
+		
+                if ( strstr(xml_line, "</note>") ) { /* ä¸€ä¸ªéŸ³ç¬¦ç»“æŸ */
+                    continue;
+                }
+	
+	
+            
+		if ( strstr(xml_line, "</measure>") ) { /* å°èŠ‚ç»“æŸ */
+		    acc_in_measure=FALSE;            /* æ¸…é™¤ä¸´æ—¶å‡é™è®°å·æ ‡è®° */
+		    break;
+		}
+	    } /* åœ¨ä¸€å°èŠ‚å†… */
+	}   /* å®Œæˆä¸€å°èŠ‚å†… */
+    }
+    
+    cur->next=new_note(); /* æœ«å°¾ç©ºèŠ‚ç‚¹ */
+    cur=cur->next;	  /* curæŒ‡é’ˆå‰è¿›ä¸€æ­¥ */
+    
+    return head;
+}
+
+
+main(int argc, char **argv) {
+    
+    unsigned short divisions=0;  /* ä»¥4è¡¨ç¤ºä¸€ä¸ªå››åˆ†éŸ³çš„æ—¶å€¼ */
+    char mode[32] = "";         /* "major" "minor" */
+    short fifths = 0;         /* å‡é™ç¬¦å·çš„ä¸ªæ•°ï¼Œä¹Ÿå°±æ˜¯è°ƒå·, 0ä»£è¡¨C */
+    unsigned char beats = 2;  /* æ¯å°èŠ‚çš„æ‹å­æ•° */
+    unsigned char beat_type = 4; /* ä»¥ä»€ä¹ˆéŸ³ç¬¦ä¸ºä¸€æ‹ */
+
+    NOTE *head1 = NULL, *head2 = NULL; /* é“¾è¡¨ç¬¬ä¸€ä¸ªéŸ³ç¬¦ */
+    NOTE *cur1 = NULL, *cur2 = NULL;   /* é“¾è¡¨å½“å‰éŸ³ç¬¦ */
+
+
+    FILE *fp1;
+    FILE *fp2;
+    
+
+    
+    /* 1  Open 2 xml files */
+    fp1 = fopen(argv[1], "r");
+    if( fp1 == NULL ) {
+        printf("open file error.\n");
+        return -1;
+    }
+
+    /* fp2 = fopen(argv[2], "r"); */
+    /* if( fp2 == NULL ) { */
+    /*     printf("open file error.\n"); */
+    /*     return -1; */
+    /* } */
+
+
+
+        
+        
+    /* è¯»å…¥XMLåˆ°é“¾è¡¨ */
+    head1 = xml_data(fp1, &divisions); /* &divisionsåº”è¯¥æ›¿æ¢æˆ divï¼Œmodeï¼Œkeyï¼Œbeatsç­‰çš„ç»“æ„æŒ‡é’ˆ */
+    /* head2 = xml_data(fp2); */
+
+    cur1=head1;
+    for (cur1=head1; cur1->next!=NULL; cur1=cur1->next) {
+        printf("measuer_num=%d\n", cur1->measure_num);
+        printf("step=%s\n", cur1->step);
+        printf("duration=%d\n", cur1->duration);
+    }
+
+    printf("div=%d\n", divisions);
+
+    printf("\n\n");
+    
+
+}
